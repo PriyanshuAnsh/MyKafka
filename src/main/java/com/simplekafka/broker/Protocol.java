@@ -1,5 +1,7 @@
 package com.simplekafka.broker;
 
+import io.netty.channel.socket.SocketChannel;
+
 import java.nio.ByteBuffer;
 
 /**
@@ -64,4 +66,71 @@ public class Protocol {
         return null;
     }
 
+    /**
+     * Decodes a response from the Produce Request
+     * @param byteBuffer ByteBuffer Response from ProduceRequest
+     * @return ProduceResult object
+     */
+    public static ProduceResult decodeProduceResponse(ByteBuffer byteBuffer) {
+        return null;
+    }
+
+    /**
+     * Decodes a response from the Fetch Request
+     * @param byteBuffer ByteBuffer Response from FetchRequest
+     * @return FetchResult object
+     */
+    public static FetchResult decodeFetchResponse(ByteBuffer byteBuffer) {
+
+        return null;
+    }
+
+    /**
+     * Decodes a response from the Metadata Request
+     * @param byteBuffer ByteBuffer Response from MetadataRequest
+     * @return MetadataResult object
+     */
+    public static MetadataResult decodeMetadataResponse(ByteBuffer byteBuffer) {
+        return null;
+    }
+
+    public static ByteBuffer encodeReplicateRequest(String topic, int partition, long offset, byte[] message) {
+        return null;
+    }
+    public static ByteBuffer encodeTopicNotification(String topic) {
+        return null;
+    }
+
+    public static void sendErrorResponse(SocketChannel channel, String errorMessage) {
+
+    }
+
+
+    private static class ProduceResult {
+        byte offset;
+        String errorMessage;
+
+    }
+
+    private static class FetchResult {
+        byte[] messages;
+        String errorMessage;
+    }
+
+    private static class MetadataResult {
+        BrokerInfo brokerInfo;
+        TopicMetadata topicMetadata;
+        String errorMessage;
+    }
+
+    private static class TopicMetadata {
+        String topicName;
+        PartitionMetadata partitionMetadata;
+    }
+
+    private static class PartitionMetadata {
+        int partitionId;
+        int leaderBrokerId;
+        int replicaBrokerId;
+    }
 }
