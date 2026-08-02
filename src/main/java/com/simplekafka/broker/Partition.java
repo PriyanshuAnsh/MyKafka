@@ -1,6 +1,5 @@
 package com.simplekafka.broker;
 
-import io.netty.buffer.ByteBuf;
 
 import java.io.File;
 import java.io.IOException;
