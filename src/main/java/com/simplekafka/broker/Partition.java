@@ -29,6 +29,30 @@ public class Partition {
     private static final String LOG_SUFFIX = ".log";
     private static final String INDEX_SUFFIX = ".index";
 
+    public int getId() {
+        return id;
+    }
+
+    public void setLeader(int leader) {
+        this.leader = leader;
+    }
+
+    public void setFollowers(List<Integer> followers) {
+        this.followers = followers;
+    }
+
+    public int getLeader() {
+        return leader;
+    }
+
+    public long getLogEndOffset() {
+        return nextOffset.get();
+    }
+
+    public List<Integer> getFollowers() {
+        return followers;
+    }
+
     public Partition(int id, int leader, List<Integer> followers, String baseDir) {
         this.id = id;
         this.leader = leader;

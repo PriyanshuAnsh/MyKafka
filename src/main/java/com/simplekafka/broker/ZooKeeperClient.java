@@ -4,6 +4,7 @@ import org.apache.zookeeper.*;
 import org.apache.zookeeper.data.Stat;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.logging.Level;
@@ -20,14 +21,14 @@ public class ZooKeeperClient implements Watcher {
 
     private static final int SESSION_TIMEOUT = 3000;
     private String host;
-    private String port;
+    private int port;
     private CountDownLatch connectedSignal = new CountDownLatch(1);
     private ZooKeeper zooKeeper;
     private static Logger LOGGER = Logger.getLogger(ZooKeeperClient.class.getName());
 
 
 
-    public ZooKeeperClient(String host, String port) {
+    public ZooKeeperClient(String host, int port) {
         this.host = host;
         this.port = port;
     }
@@ -151,5 +152,23 @@ public class ZooKeeperClient implements Watcher {
                 LOGGER.log(Level.SEVERE, "Failed to reconnect to ZooKeeper", e);
             }
         }
+    }
+
+    public List<String> getChildren(String path) throws InterruptedException, KeeperException {
+        try {
+            return zooKeeper.getChildren(path, false);
+        } catch(KeeperException.NoNodeException e) {
+            return new ArrayList<>();
+        }
+    }
+
+    public boolean exists(String path) throws InterruptedException, KeeperException {
+        Stat stat = zooKeeper.exists(path, false);
+        return stat != null;
+    }
+
+    public String getData(String path) throws InterruptedException, KeeperException {
+        byte[] data = zooKeeper.getData(path, false, null);
+        return new String(data);
     }
 }
