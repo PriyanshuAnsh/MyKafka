@@ -328,6 +328,24 @@ public class Partition {
         return segments.get(idx);
     }
 
+    public void close() {
+        lock.writeLock().lock();
+        try {
+            if(activeLogChannel != null && activeLogChannel.isOpen()) {
+                activeLogChannel.close();
+            }
+
+            if(activeLogFile != null) {
+                activeLogFile.close();
+            }
+        } catch(Exception e) {
+            LOGGER.log(Level.SEVERE, "Failed to close partition resources", e);
+        } finally {
+            lock.writeLock().unlock();
+        }
+
+    }
+
     private static class SegmentInfo implements Comparable<SegmentInfo> {
         private final long baseOffset;
         private final String logPath;
@@ -358,5 +376,7 @@ public class Partition {
             return Long.compare(this.getBaseOffset(), o.getBaseOffset());
         }
     }
+
+
 
 }

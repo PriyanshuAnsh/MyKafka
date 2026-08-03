@@ -12,6 +12,13 @@ import java.util.logging.Logger;
 
 public class ZooKeeperClient implements Watcher {
 
+    public void deleteNode(String path) throws InterruptedException, KeeperException {
+        if(exists(path)) {
+            zooKeeper.delete(path, -1);
+            LOGGER.info("Deleted node: " + path);
+        }
+    }
+
     public interface ChildrenCallback {
         void onChildrenChanged(List<String> children);
     }
@@ -67,14 +74,14 @@ public class ZooKeeperClient implements Watcher {
         return false;
     }
 
-    public void watchChild(String path, ChildrenCallback callback) {
+    public void watchChildren(String path, ChildrenCallback callback) {
         try {
             List<String> children = zooKeeper.getChildren(path, event -> {
                 if(event.getType() == Event.EventType.NodeChildrenChanged) {
                     try {
                         List<String> newChildren = zooKeeper.getChildren(path, event1 -> {
                            if(event1.getType() == Event.EventType.NodeChildrenChanged) {
-                               watchChild(path, callback);
+                               watchChildren(path, callback);
                            }
                         });
                         callback.onChildrenChanged(newChildren);
@@ -126,7 +133,7 @@ public class ZooKeeperClient implements Watcher {
 
     }
 
-    private String getConnectString() {
+    public String getConnectString() {
         return host + ":" + port;
     }
 
@@ -171,4 +178,10 @@ public class ZooKeeperClient implements Watcher {
         byte[] data = zooKeeper.getData(path, false, null);
         return new String(data);
     }
+
+    public void setData(String path, String data) throws InterruptedException, KeeperException {
+        zooKeeper.setData(path, data.getBytes(), -1);
+    }
+
+
 }
