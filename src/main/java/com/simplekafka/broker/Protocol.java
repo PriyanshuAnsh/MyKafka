@@ -1,8 +1,7 @@
 package com.simplekafka.broker;
 
-import io.netty.channel.socket.SocketChannel;
-
 import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
 
 /**
  * This class is the foundation of `MyKafka` wire protocol implementation.
@@ -19,9 +18,13 @@ public class Protocol {
     public static final byte CREATE_TOPIC = 0x04;
 
     //Broker Response Types
-    public static final int PRODUCE_RESPONSE = 0x11;
-    public static final int FETCH_RESPONSE = 0x12;
+    public static final byte PRODUCE_RESPONSE = 0x11;
+    public static final byte FETCH_RESPONSE = 0x12;
 
+    // Internal Broker Communications
+    public static final byte REPLICATE = 0x21;
+    public static final byte REPLICATE_ACK = 0x22;
+    public static final byte TOPIC_NOTIFICATION = 0x23;
 
     /**
      * Encodes the message to produce/write to the topic.

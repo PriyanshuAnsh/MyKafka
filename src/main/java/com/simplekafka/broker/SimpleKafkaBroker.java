@@ -1,11 +1,14 @@
 package com.simplekafka.broker;
 
+import io.netty.buffer.ByteBuf;
 import org.apache.zookeeper.KeeperException;
 
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -125,12 +128,61 @@ public class SimpleKafkaBroker {
                 int partitionId = i;
                 String partitionDir = topicDir + File.separator + partitionId;
                 new File(partitionDir).mkdirs();
+                int leaderIdx = i % brokerIds.size();
+                int leaderId = brokerIds.get(leaderIdx);
+
+                List<Integer> followers = new ArrayList<>();
+                for(int j = 1; j < replicationFactor; i++) {
+                    int followerIdx = (j + leaderIdx) % brokerIds.size();
+                    followers.add(brokerIds.get(followerIdx));
+                }
+
+                Partition partition = new Partition(partitionId, leaderId, followers, partitionDir);
+                partitions.add(partition);
+
+                String partitionPath = topicPath + "/partitions/" + partitionId;
+                StringBuilder partitionDataBuilder = new StringBuilder(leaderId + ";");
+
+                for(int f: followers) {
+                    partitionDataBuilder.append(f).append(",");
+                }
+                String partitionData = partitionDataBuilder.toString();
+
+                zkClient.createPersistentNodes(partitionPath, partitionData);
+                LOGGER.info("Created partition " + partitionId +
+                        " for topic " + topic +
+                        " with leader " + leaderId +
+                        " and followers " + followers);
+            }
+
+            topics.put(topic, partitions);
+
+            for(int i: brokerIds) {
+                if(i != this.brokerId) notifyBrokerForTopicCreation(brokerId, topic);
             }
         } catch(Exception e) {
-
+            LOGGER.log(Level.SEVERE, "Failed to create topic", e);
         }
+    }
 
-
+    private void notifyBrokerForTopicCreation(int brokerId, String topic) {
+        BrokerInfo broker = clusterMetadata.get(brokerId);
+        if(broker == null) return;
+        executor.submit(() -> {
+           try(SocketChannel brokerChannel = SocketChannel.open()) {
+               brokerChannel.connect(new InetSocketAddress(broker.getHost(), broker.getPort()));
+               ByteBuffer request = ByteBuffer.allocate(3 + topic.length());
+               request.put(Protocol.TOPIC_NOTIFICATION);
+               request.putShort((short) topic.length());
+               request.put(topic.getBytes());
+               request.flip();
+               brokerChannel.write(request);
+               ByteBuffer response = ByteBuffer.allocate(1);
+               brokerChannel.read(response);
+           } catch(Exception e) {
+               LOGGER.log(Level.WARNING, "Failed to notify broker " + brokerId + " about topic creation", e);
+           }
+        });
     }
 
     public void loadTopics() {
@@ -333,7 +385,94 @@ public class SimpleKafkaBroker {
         } catch(Exception e) {
             LOGGER.log(Level.SEVERE, "Failed to update partition metadata", e);
         }
+    }
 
+    private void handleProduceRequest(SocketChannel clientChannel, ByteBuffer buffer) throws IOException {
+        short topicLength = buffer.getShort();
+        byte[] topicByte = new byte[topicLength];
+        buffer.get(topicByte);
+        String topic = new String(topicByte);
+
+        int partition = buffer.getInt();
+        int messageSize = buffer.getInt();
+        byte[] message = new byte[messageSize];
+        buffer.get(message);
+
+        LOGGER.info("Produce request for topic: " + topic + ", partition: " + partition);
+
+        if(!topics.containsKey(topic)) {
+            Protocol.sendErrorResponse(clientChannel, "Topic does not exist");
+            return;
+        }
+        List<Partition> partitions = topics.get(topic);
+        Partition target = null;
+
+        for(Partition p: partitions) {
+            if(p.getId() == partition) {
+                target = p;
+                break;
+            }
+        }
+
+        if (target == null) {
+            Protocol.sendErrorResponse(clientChannel, "Partition does not exist");
+            return;
+        }
+
+        if(target.getLeader() != brokerId) {
+            forwardProduceToLeader(clientChannel, topic, partition, message, target.getLeader());
+            return;
+        }
+
+        long offset = target.append(message);
+        replicateToFollowers(topic, target, message, offset);
+
+        ByteBuffer response = ByteBuffer.allocate(10);
+        response.put(Protocol.PRODUCE_RESPONSE);
+        response.putLong(offset);
+        response.put((byte) (offset > -1 ? 0 : 1)); // 0 = success, 1 = error
+        response.flip();
+        clientChannel.write(response);
+
+
+    }
+
+    private void replicateToFollowers(String topic, Partition partition, byte[] message, long offset) {
+        for(int followerId: partition.getFollowers()) {
+            if(followerId == brokerId) continue;
+            BrokerInfo follower = clusterMetadata.get(followerId);
+            if(follower == null) continue;
+            executor.submit(() -> {
+                try(SocketChannel followerChannel = SocketChannel.open()) {
+                    followerChannel.connect(new InetSocketAddress(follower.getHost(), follower.getPort()));
+                    ByteBuffer request = ByteBuffer.allocate(17 + topic.length() + message.length);
+                    request.put(Protocol.REPLICATE);
+                    request.putShort((short) topic.length());
+                    request.put(topic.getBytes());
+                    request.putInt(partition.getId());
+                    request.putLong(offset);
+                    request.putInt(message.length);
+                    request.put(message);
+                    request.flip();
+
+                    followerChannel.write(request);
+                    ByteBuffer response = ByteBuffer.allocate(1);
+                    followerChannel.read(response);
+
+                    response.flip();
+
+                    byte ack = response.get();
+                    LOGGER.info("Replication to follower " + followerId + " " +
+                            (ack == Protocol.REPLICATE_ACK ? "succeeded" : "failed"));
+                } catch(IOException e) {
+                    LOGGER.log(Level.SEVERE, "Replication to follower " + followerId + " failed", e);
+                }
+            });
+
+        }
+    }
+
+    private void forwardProduceToLeader(SocketChannel clientChannel, String topic, int partition, byte[] message, int leader) {
 
     }
 
