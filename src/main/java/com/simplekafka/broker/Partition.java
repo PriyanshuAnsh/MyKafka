@@ -87,14 +87,14 @@ public class Partition {
                 Collections.sort(segments);
 
                 if(!segments.isEmpty()) {
-                    SegmentInfo lastSeg = segments.getLast();
+                    SegmentInfo lastSeg = segments.get(segments.size() - 1);
                     nextOffset.set(lastSeg.getBaseOffset() + countMessageInSegment(lastSeg));
                 }
             }
             if(segments.isEmpty()) {
                 createNewSegment(0);
             } else {
-                SegmentInfo lastSeg = segments.getLast();
+                SegmentInfo lastSeg = segments.get(segments.size() - 1);
                 openSegmentForAppend(lastSeg);
             }
             LOGGER.info("Initialized partition " + id + " with " + segments.size() +
@@ -193,7 +193,7 @@ public class Partition {
     private void updateIndex(long offset, long position) {
         try {
             if(segments.isEmpty()) return;
-            SegmentInfo currentSegment = segments.getLast();
+            SegmentInfo currentSegment = segments.get(segments.size() - 1);
             try(RandomAccessFile indexFile = new RandomAccessFile(currentSegment.getIndexPath(), "rw");
                 FileChannel indexChannel = indexFile.getChannel()) {
                 indexChannel.position(indexChannel.size());
